@@ -6,20 +6,247 @@ output:
 ---
 
 
-## Loading and preprocessing the data
+
+##### Loading and preprocessing the data
+  - Load the data
+```{r}
+#Loading and preprocessing the data ***********************************************************
+#--d_r, raw data
+d_r <- read.table('activity.csv',
+                 header=T,
+                 sep=',',
+                 stringsAsFactors=F)
+```
+
+
+  - Process/transform the data into a format suitable for analysis
+    - Only include complete rows where there are no na's.
+    - Convert time interval to hh:mm representation.
+```{r}
+#--number of complete rows without an 'na'
+#----d_c, data clean
+d_c = d_r[which( complete.cases(d_r) ), ]
+#--hh:mm format for interval
+d_c$interval = sprintf("%04d", d_c$interval)
+d_c$interval = paste( substr(d_c$interval, 1,2), ':', substr(d_c$interval, 3,4), sep='' )
+str(d_c)
+```
 
 
 
-## What is mean total number of steps taken per day?
+
+
+#####What is mean total number of steps taken per day?
+
+
+  - Missing values are ignored in the dataset for this section. 
+
+
+  - Histogram of the total number of steps taken each day.
+```{r}
+#--grouped by date, mean number of steps per day
+g_date = aggregate(d_c$steps, list(date=d_c$date), sum)
+names(g_date)[2] = 'steps'
+hist(g_date$steps, main='Total number of steps per day', xlab='Steps')
+```
+
+  
+  - Mean total number of steps per day.
+```{r}
+#--mean number of steps per day
+paste('Mean number of steps per day:', mean(g_date$steps))
+```
+
+
+  - Median total number of steps per day.
+```{r}
+#--median number of steps per day
+paste('Median number of steps per day:', median(g_date$steps))
+```
+
+We notice the data is very symmetrical and the mean and median are almost identical. 
 
 
 
-## What is the average daily activity pattern?
+
+#####What is the average daily activity pattern?
 
 
 
-## Imputing missing values
+  - Time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis). For some reason I just cannot get the graph to be a line plot, even though type='l'.
+  
+  
+```{r}
+#What is the average daily activity pattern? *************************************************
+#--interval on average over all days with max steps
+#----grouped by interval
+ms = aggregate(d_c$steps, list(interval = d_c$interval), mean)
+names(ms)[2] = 'steps'
+plot(x=as.factor(ms$interval),
+     y=ms$steps,
+     type='l', lty=1, lwd=1,
+     xaxt='n',
+     main='Mean number of steps per interval across all days',
+     xlab='Interval, hh:mm',
+     ylab='Steps'
+     )
+axis(1,
+     las=1,
+     at=c(1,25,49,73,97,121,145,169,193,217,241,265,288), 
+     labels = F
+     )
+text(c(1,25,49,73,97,121,145,169,193,217,241,265,288),
+     labels=c('00:00','02:00','04:00','06:00','08:00','10:00','12:00',
+         '14:00','16:00','18:00','20:00','22:00', '23:55'),
+     par("usr")[3] - 0.2,
+     pos=2,
+     xpd=T,
+     srt=90
+)
+```
 
 
 
-## Are there differences in activity patterns between weekdays and weekends?
+  - Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+#--max steps interval
+paste('Time interval on average for maximum number of steps:'
+       ,ms[which(ms$steps==max(ms$steps)), ])
+```
+
+
+
+
+
+#####Imputing missing values
+
+
+
+  - Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+```{r}
+#--number of rows with missing values
+paste('Number of rows with missing data:', nrow(d_r) - nrow(d_c))
+```
+
+
+  - Devise a strategy for filling in all of the missing values in the dataset. I have used median value across all days per interval as an imputed value.
+  
+
+```{r}
+#--missing values will be replaced with median over all days
+#--for that interval
+md = aggregate(d_c$steps, list(interval = d_c$interval), median)
+names(md)[2] = 'steps'
+md = cbind(md, int_interval = as.integer( paste( substr(md$interval,1,2), substr(md$interval,4,5), sep='' ) ))
+#--data transformed, d_t
+d_t = d_r
+for (n in 1:nrow(d_t)) {
+  if (sum(is.na(d_t[n,])) > 0) {
+    #--row contain an na
+    #--replace with median steps, md$steps
+    d_t[n,]$steps = md[which(md$int_interval==d_t[n,]$interval), 2]
+  }
+}
+#--d_t, new dataset that is same as original dataset (d_r) 
+#--but with the missing data filled in
+```
+
+  - Make a histogram of the total number of steps taken each day. Calculation is based on NA's replaced with imputed values from the raw data.
+
+```{r}
+#--number of steps per day
+#----grouped by date
+d_t_date = aggregate(d_t$steps, list(date=d_t$date), sum)
+names(d_t_date)[2] = 'steps'
+hist(d_t_date$steps,
+     main='Frequency plot of steps per day using imputed values',
+     xlab='Steps per day'
+     )
+```
+
+
+
+  - Calculate and report the mean and median total number of steps with the imputed data.
+  
+  - Mean with imputed data
+  
+```{r}
+#--mean number of steps per day with imputed data
+paste('Mean number of steps per day with imputed data:', mean(d_t_date$steps))
+```
+
+   - median with imputed data
+
+```{r}
+#--median number of steps per day, with imputed data
+paste('Median number of steps per day with imputed data:', median(d_t_date$steps))
+```
+
+  - Difference in mean, median between raw data with dropped NA rows, and data with imputed values for NA rows.
+  
+```{r}
+#--difference in means, medians
+#----diff in mean
+paste('Diff in means:', mean(d_t_date$steps) - mean(g_date$steps))
+#----diff in median
+paste('Diff in medians:', median(d_t_date$steps) - median(g_date$steps))
+```
+
+We see, by including imputed data, the mean is reduced by around 10 percent. The medians are still very similar.
+
+
+
+
+
+#####Are there differences in activity patterns between weekdays and weekends?
+
+
+
+  - Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+#Are there differences in activity patterns between weekdays and weekends?*****************
+#--create weekday/ weekend 2-factor vector
+v = d_t$date
+v[] = 'weekday'
+v[which( substr( weekdays( as.Date( d_t$date ) ), 1, 1 ) == 'S' )] = 'weekend'
+d_t = cbind(d_t, span=as.factor(v))
+#--hh:mm format for interval
+d_t$interval = sprintf("%04d", d_t$interval)
+d_t$interval = paste( substr(d_t$interval, 1,2), ':', substr(d_t$interval, 3,4), sep='' )
+str(d_t)
+```
+
+  - Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+  
+
+```{r}
+#--grouped by 2-factor (weeked or weekday) + interval
+#--mean number of steps per day per period, with imputed data
+d1 = aggregate(d_t$steps, list(span=d_t$span, interval=d_t$interval), mean)
+names(d1)[3] = 'steps'
+
+#--lattice plot for 2-factor weekend and weekday
+library(lattice)
+xyplot(d1$steps~as.factor(d1$interval) | d1$span,
+       d1,
+       layout=c(1,2),
+       type='l',
+       xlab='interval',
+       ylab='steps',
+       scales=list(x=list(at=c(1,25,49,73,97,121,145,169,193,217,241,265,288),
+                          labels=c('00:00','02:00','04:00','06:00','08:00','10:00','12:00',
+                                   '14:00','16:00','18:00','20:00','22:00', '23:55')
+         ))
+       )
+
+```
+
+
+From the lattice plot one can clearly see peak activity in the early morning on weekdays is higher than the weekend.
+
+
+Weekend data shows somewhat higher usage during the day, which is hardly suprising as people are at work during the working day. 
+
